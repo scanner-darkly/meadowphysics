@@ -123,6 +123,8 @@ static void check_events(void);
 static void handler_None(s32 data) { ;; }
 static void handler_KeyTimer(s32 data);
 static void handler_Front(s32 data);
+static void handler_ClockNormal(s32 data);
+
 
 u8 flash_is_fresh(void);
 void flash_unfresh(void);
@@ -356,6 +358,10 @@ static void handler_KeyTimer(s32 data) {
 			// print_dbg_ulong(held_keys[i1]);
 		}
 	}
+}
+
+static void handler_ClockNormal(s32 data) {
+	clock_external = !gpio_get_pin_value(B09); 
 }
 
 
@@ -653,6 +659,7 @@ static inline void assign_main_event_handlers(void) {
 	app_event_handlers[ kEventPollADC ]	= &handler_PollADC;
 	app_event_handlers[ kEventKeyTimer ] = &handler_KeyTimer;
 	app_event_handlers[ kEventSaveFlash ] = &handler_SaveFlash;
+	app_event_handlers[ kEventClockNormal ] = &handler_ClockNormal;
 	app_event_handlers[ kEventFtdiConnect ]	= &handler_FtdiConnect ;
 	app_event_handlers[ kEventFtdiDisconnect ]	= &handler_FtdiDisconnect ;
 	app_event_handlers[ kEventMonomeConnect ]	= &handler_MonomeConnect ;
