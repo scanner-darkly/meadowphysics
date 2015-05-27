@@ -22,6 +22,7 @@ refresh preset while in ext trigger mode?
 // skeleton
 #include "types.h"
 #include "events.h"
+#include "i2c.h"
 #include "init.h"
 #include "interrupts.h"
 #include "monome.h"
@@ -29,9 +30,11 @@ refresh preset while in ext trigger mode?
 #include "adc.h"
 #include "util.h"
 #include "ftdi.h"
+#include "twi.h"
 
 // this
 #include "conf_board.h"
+#include "ii.h"
 	
 
 #define FIRSTRUN_KEY 0x22
@@ -131,6 +134,8 @@ void flash_unfresh(void);
 void flash_write(void);
 void flash_read(void);
 
+
+static void mp_process_ii(uint8_t i, int d);
 
 
 static void cascades_trigger(u8 n);
@@ -650,6 +655,34 @@ static void cascades_trigger(u8 n) {
 }
 
 
+static void mp_process_ii(uint8_t i, int d) {
+	switch(i) {
+		case MP_PRESET:
+			if(d<0 || d>8)
+				break;
+			preset_select = d;
+			flash_read();
+			break;
+		case MP_RESET:
+				if(d) {
+					m.positions[0] = m.points[0]+1;
+					for(int n=1;n<8;n++)
+						m.positions[n] = m.points[n];
+				}
+			break;
+		default:
+			break;
+	}
+  // print_dbg("\r\nmp: ");
+  // print_dbg_ulong(i);
+  // print_dbg(" ");
+  // print_dbg_ulong(d);
+}
+
+
+
+
+
 
 
 // assign event handlers
@@ -741,13 +774,15 @@ void flash_read(void) {
 
 
 
+
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 // main
 
-int main(void)
-{
+
+int main(void) {
 	u8 i1;
 
 	sysclk_init();
@@ -768,6 +803,7 @@ int main(void)
 	init_usb_host();
 	init_monome();
 
+	init_i2c_slave(0x30);
 
 	print_dbg("\r\n\n// meadowphysics //////////////////////////////// ");
 	print_dbg_ulong(sizeof(flashy));
@@ -815,6 +851,8 @@ int main(void)
 	SIZE = 16;
 
 	re = &refresh;
+
+	process_ii = &mp_process_ii;
 
 	clock_pulse = &clock;
 	clock_external = !gpio_get_pin_value(B09);
