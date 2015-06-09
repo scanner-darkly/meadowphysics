@@ -696,6 +696,30 @@ static void mp_process_ii(uint8_t i, int d) {
 				(*clock_pulse)(clock_phase);
 			}
 			break;
+		case MP_MUTE:
+			if(d<1 || d>9)
+				break;
+			d--;
+			m.mutes[d] = 1;
+			break;
+		case MP_UNMUTE:
+			if(d<1 || d>9)
+				break;
+			d--;
+			m.mutes[d] = 0;
+			break;
+		case MP_FREEZE:
+			if(d<1 || d>9)
+				break;
+			d--;
+			m.freezes[d] = 1;
+			break;
+		case MP_UNFREEZE:
+			if(d<1 || d>9)
+				break;
+			d--;
+			m.freezes[d] = 0;
+			break;
 		default:
 			break;
 	}
