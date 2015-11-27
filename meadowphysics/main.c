@@ -693,10 +693,13 @@ static void mp_process_ii(uint8_t i, int d) {
 			if(d>0 && d<9) {
 				d--;
 				m.position[d] = m.count[d];
+				m.tick[d] = m.speed[d];
 			}
 			else if(d==0) {
-				for(int n=0;n<8;n++)
+				for(int n=0;n<8;n++) {
 					m.position[n] = m.count[n];
+					m.tick[n] = m.speed[n];
+				}
 			}
 			break;
 		case MP_STOP:
