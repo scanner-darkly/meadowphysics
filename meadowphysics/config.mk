@@ -89,6 +89,8 @@ CSRCS = \
        avr32/drivers/usart/usart.c                        \
        avr32/drivers/usbb/usbb_host.c                     \
        avr32/utils/debug/print_funcs.c                    \
+       common/services/usb/class/msc/host/uhi_msc.c       \
+       common/services/usb/class/msc/host/uhi_msc_mem.c   \
        common/services/spi/uc3_spi/spi_master.c \
        common/services/usb/uhc/uhc.c \
        common/services/clock/uc3b0_b1/sysclk.c  
@@ -129,6 +131,8 @@ INC_PATH = \
        common/services/delay                              \
        common/services/usb/ \
        common/services/usb/uhc \
+       common/services/usb/class/msc                      \
+       common/services/usb/class/msc/host                 \
        common/services/usb/class/hid                      \
        common/services/spi/uc3_spi \
        common/utils                                       
