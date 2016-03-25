@@ -57,7 +57,7 @@ u8 clear[8] = {0,0,0,0,0,0,0,0};
 typedef struct {
 	u8 count[8];		// length of cycle
 	s8 position[8];		// current position in cycle
-	u8 speed[8];		// speed of cycle
+	s8 speed[8];		// speed of cycle
 	u8 tick[8]; 		// position in speed countdown
 	u8 min[8];
 	u8 max[8];
@@ -66,6 +66,11 @@ typedef struct {
 	u8 rules[8];
 	u8 rule_dests[8];
 	u8 sync[8]; 		// if true, reset dest rule to count
+	u8 sound;
+	u8 pushed[8];
+	u8 rule_dest_targets[8];
+	u8 smin[8];
+	u8 smax[8];
 } mp_set;
 
 typedef const struct {
@@ -144,47 +149,104 @@ void clock(u8 phase) {
 		gpio_set_gpio_pin(B10);
 
 		for(i=0;i<8;i++) {
+			if(m.pushed[i]) {
+				for(int n=0;n<8;n++) {
+					if(m.sync[i] & (1<<n)) {
+						m.position[n] = m.count[n];
+						m.tick[n] = m.speed[n];
+					}
+
+					if(m.trigger[i] & (1<<n)) {
+						state[n] = 1;
+						clear[n] = 1;
+					}
+					else if(m.toggle[i] & (1<<n)) {
+						state[n] ^= 1;
+					}
+				}
+
+				m.pushed[i] = 0;
+			}
+
 			if(m.tick[i] == 0) {
 				m.tick[i] = m.speed[i];
 				if(m.position[i] == 0) {
 					// RULES
 				    if(m.rules[i] == 1) {     // inc
-				    	m.count[m.rule_dests[i]]++;
-				    	if(m.count[m.rule_dests[i]] > m.max[m.rule_dests[i]]) {
-				    		m.count[m.rule_dests[i]] = m.min[m.rule_dests[i]];
-				    	}
+				    	if(m.rule_dest_targets[i] & 1) {
+					    	m.count[m.rule_dests[i]]++;
+					    	if(m.count[m.rule_dests[i]] > m.max[m.rule_dests[i]]) {
+					    		m.count[m.rule_dests[i]] = m.min[m.rule_dests[i]];
+					    	}
+					    }
+					    if(m.rule_dest_targets[i] & 2) {
+					    	m.speed[m.rule_dests[i]]++;
+					    	if(m.speed[m.rule_dests[i]] > m.smax[m.rule_dests[i]]) {
+					    		m.speed[m.rule_dests[i]] = m.smin[m.rule_dests[i]];
+					    	}
+					    }
 				    }
 				    else if(m.rules[i] == 2) {  // dec
-			    		m.count[m.rule_dests[i]]--;
-				    	if(m.count[m.rule_dests[i]] < m.min[m.rule_dests[i]]) {
-				    		m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
-				    	}
+				    	if(m.rule_dest_targets[i] & 1) {
+				    		m.count[m.rule_dests[i]]--;
+					    	if(m.count[m.rule_dests[i]] < m.min[m.rule_dests[i]]) {
+					    		m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
+					    	}
+					    }
+					    if(m.rule_dest_targets[i] & 2) {
+					    	m.speed[m.rule_dests[i]]--;
+					    	if(m.speed[m.rule_dests[i]] < m.smin[m.rule_dests[i]]) {
+					    		m.speed[m.rule_dests[i]] = m.smax[m.rule_dests[i]];
+					    	}
+					    }
 				    }
 				    else if(m.rules[i] == 3) {  // max
-				    	m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
+				    	if(m.rule_dest_targets[i] & 1)
+				    		m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
+				    	if(m.rule_dest_targets[i] & 2)
+				    		m.speed[m.rule_dests[i]] = m.smax[m.rule_dests[i]];
 				    }
 				    else if(m.rules[i] == 4) {  // min
-				    	m.count[m.rule_dests[i]] = m.min[m.rule_dests[i]];
+				    	if(m.rule_dest_targets[i] & 1)
+					    	m.count[m.rule_dests[i]] = m.min[m.rule_dests[i]];
+					    if(m.rule_dest_targets[i] & 2)
+					    	m.speed[m.rule_dests[i]] = m.smin[m.rule_dests[i]];
 				    }
 				    else if(m.rules[i] == 5) {  // rnd
-				    	m.count[m.rule_dests[i]] = 
-				    	(rnd() % (m.max[m.rule_dests[i]] - m.min[m.rule_dests[i]] + 1)) + m.min[m.rule_dests[i]];
-
+				    	if(m.rule_dest_targets[i] & 1)
+				    		m.count[m.rule_dests[i]] = 
+				    			(rnd() % (m.max[m.rule_dests[i]] - m.min[m.rule_dests[i]] + 1)) + m.min[m.rule_dests[i]];
+				    	if(m.rule_dest_targets[i] & 2)
+				    		m.speed[m.rule_dests[i]] = 
+				    			(rnd() % (m.smax[m.rule_dests[i]] - m.smin[m.rule_dests[i]] + 1)) + m.smin[m.rule_dests[i]];
+				    					
 				      // print_dbg("\r\n RANDOM: ");
 				      // print_dbg_hex(m.count[m.rule_dests[i]]);
 				      // print_dbg_hex(rnd() % 11);
 				    }
 				    else if(m.rules[i] == 6) {  // pole
-				    	if(abs(m.count[m.rule_dests[i]] - m.min[m.rule_dests[i]]) < 
-				    		abs(m.count[m.rule_dests[i]] - m.max[m.rule_dests[i]]) ) {
-				    		m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
-				    	}
-				    	else {
-				    		m.count[m.rule_dests[i]] = m.min[m.rule_dests[i]];
-				    	}
+				    	if(m.rule_dest_targets[i] & 1) {
+					    	if(abs(m.count[m.rule_dests[i]] - m.min[m.rule_dests[i]]) < 
+					    		abs(m.count[m.rule_dests[i]] - m.max[m.rule_dests[i]]) ) {
+					    		m.count[m.rule_dests[i]] = m.max[m.rule_dests[i]];
+					    	}
+					    	else {
+					    		m.count[m.rule_dests[i]] = m.min[m.rule_dests[i]];
+					    	}
+					    }
+					    if(m.rule_dest_targets[i] & 2) {
+					    	if(abs(m.speed[m.rule_dests[i]] - m.smin[m.rule_dests[i]]) < 
+					    		abs(m.speed[m.rule_dests[i]] - m.smax[m.rule_dests[i]]) ) {
+					    		m.speed[m.rule_dests[i]] = m.smax[m.rule_dests[i]];
+					    	}
+					    	else {
+					    		m.speed[m.rule_dests[i]] = m.smin[m.rule_dests[i]];
+					    	}
+					    }
 				    }
 				    else if(m.rules[i] == 7) {  // stop
-				    	m.position[m.rule_dests[i]] = -1;
+				    	if(m.rule_dest_targets[i] & 1)
+				    		m.position[m.rule_dests[i]] = -1;
 				    }
 
 					m.position[i]--;
@@ -525,6 +587,10 @@ static void handler_MonomeGridKey(s32 data) {
 				m.min[y] = x;
 				m.max[y] = x;
 				m.tick[y] = m.speed[y];
+
+				if(m.sound) {
+					m.pushed[y] = 1;
+				}
 			}
 			else if(z == 1 && scount[y] == 2) {
 				if(x < m.count[y]) {
@@ -538,35 +604,55 @@ static void handler_MonomeGridKey(s32 data) {
 			}
 		}
 		// set speeds and trig/tog
-		else if(mode == 1 && z == 1) {
-			
-			if(x > 7) {
-				m.speed[y] = x-8;
-				m.tick[y] = m.speed[y];
-			}
-			else if(x == 5) {
-				m.toggle[edit_row] ^= 1<<y;
-				m.trigger[edit_row] &= ~(1<<y);
-			}
-			else if(x == 6) {
-				m.trigger[edit_row] ^= 1<<y;
-				m.toggle[edit_row] &= ~(1<<y);
-			}
-			else if(x == 2) {
-				if(m.position[y] == -1) {
-					m.position[y] = m.count[y];
+		else if(mode == 1) {
+			scount[y] += (z<<1)-1;
+			if(scount[y]<0) scount[y] = 0;
+
+			if(z==1) {
+				if(x > 7) {
+					if(scount[y] == 1) {
+						m.smin[y] = x-8;
+						m.smax[y] = x-8;
+						m.speed[y] = x-8;
+						m.tick[y] = m.speed[y];
+					}
+					else if(scount[y] == 2) {
+						if(x-8 < m.smin[y]) {
+							m.smax[y] = m.smin[y];
+							m.smin[y] = x-8;
+						}
+						else
+							m.smax[y] = x-8;
+					}
 				}
-				else {
-					m.position[y] = -1;
+				else if(x == 5) {
+					m.toggle[edit_row] ^= 1<<y;
+					m.trigger[edit_row] &= ~(1<<y);
 				}
-			}
-			else if(x == 3) {
-				m.sync[edit_row] ^= (1<<y);
+				else if(x == 6) {
+					m.trigger[edit_row] ^= 1<<y;
+					m.toggle[edit_row] &= ~(1<<y);
+				}
+				else if(x == 4) {
+					m.sound ^= 1;
+				}
+				else if(x == 2) {
+					if(m.position[y] == -1) {
+						m.position[y] = m.count[y];
+					}
+					else {
+						m.position[y] = -1;
+					}
+				}
+				else if(x == 3) {
+					m.sync[edit_row] ^= (1<<y);
+				}
 			}
 		}
 		else if(mode == 2 && z == 1) {
-			if(x > 4 && x < 7) {
+			if(x > 3 && x < 7) {
 				m.rule_dests[edit_row] = y;
+				m.rule_dest_targets[edit_row] = x-3;
 			  // post("\nrule_dests", edit_row, ":", rule_dests[edit_row]);
 			}
 			else if(x > 6) {
@@ -605,7 +691,13 @@ static void refresh() {
 			if(m.position[i1] >= 0)
 				monomeLedBuffer[i1*16 + m.position[i1]] = L0;
 
+			for(i2=m.smin[i1];i2<=m.smax[i1];i2++)
+				monomeLedBuffer[i1*16 + i2+8] = L0;
+
 			monomeLedBuffer[i1*16 + m.speed[i1]+8] = L1;
+
+			if(m.sound)
+				monomeLedBuffer[i1*16 + 4] = 2;
 
 			if(m.toggle[edit_row] & (1 << i1))
 				monomeLedBuffer[i1*16 + 5] = L2;
@@ -634,8 +726,21 @@ static void refresh() {
 		monomeLedBuffer[edit_row * 16] = L1;
 		monomeLedBuffer[edit_row * 16 + 1] = L1;
 
-		monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L2;
-		monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L2;
+		if(m.rule_dest_targets[edit_row] == 1) {
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L2;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L0;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
+		}
+		else if (m.rule_dest_targets[edit_row] == 2) {
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L0;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L2;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
+		}
+		else {
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 4] = L2;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 5] = L2;
+			monomeLedBuffer[m.rule_dests[edit_row] * 16 + 6] = L0;
+		}
 
 		for(i1=8;i1<16;i1++)
 			monomeLedBuffer[m.rules[edit_row] * 16 + i1] = L0;
@@ -813,7 +918,12 @@ void flash_read(void) {
 		m.rules[i1] = flashy.m[preset_select].rules[i1];
 		m.rule_dests[i1] = flashy.m[preset_select].rule_dests[i1];
 		m.sync[i1] = flashy.m[preset_select].sync[i1];
+		m.rule_dest_targets[i1] = flashy.m[preset_select].rule_dest_targets[i1];
+		m.smin[i1] = flashy.m[preset_select].smin[i1];
+		m.smax[i1] = flashy.m[preset_select].smax[i1];
 	}
+
+	m.sound = flashy.m[preset_select].sound;
 }
 
 
@@ -861,17 +971,20 @@ int main(void) {
 
 		// clear out some reasonable defaults
 		for(i1=0;i1<8;i1++) {
-			m.count[i1] = 7;
-			m.position[i1] = 7;
+			m.count[i1] = 7+i1;
+			m.position[i1] = 7+i1;
 			m.speed[i1] = 0;
 			m.tick[i1] = 0;
-			m.min[i1] = 7;
-			m.max[i1] = 7;
+			m.min[i1] = 7+i1;
+			m.max[i1] = 7+i1;
 			m.trigger[i1] = (1<<i1);
 			m.toggle[i1] = 0;
 			m.rules[i1] = 1;
 			m.rule_dests[i1] = i1;
 			m.sync[i1] = (1<<i1);
+			m.rule_dest_targets[i1] = 3;
+			m.smin[i1] = 0;
+			m.smax[i1] = 0;
 		}
 
 		// save all presets, clear glyphs
