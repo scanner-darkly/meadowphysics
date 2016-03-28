@@ -87,6 +87,10 @@ u8 glyph[8];
 
 u8 clock_phase;
 u16 clock_time, clock_temp;
+u8 divknob, divmode;
+s8 divtime;
+u32 clockdivtime;
+u8 clockdivcount;
 
 u16 adc[4];
 u8 SIZE, LENGTH, VARI;
@@ -124,6 +128,7 @@ static void handler_None(s32 data) { ;; }
 static void handler_KeyTimer(s32 data);
 static void handler_Front(s32 data);
 static void handler_ClockNormal(s32 data);
+static void handler_ClockExt(s32 data);
 
 
 u8 flash_is_fresh(void);
@@ -306,11 +311,10 @@ static softTimer_t monomeRefreshTimer  = { .next = NULL, .prev = NULL };
 
 
 static void clockTimer_callback(void* o) {  
-	if(clock_external == 0) {
-		// print_dbg("\r\ntimer.");
-
+	if(clock_external == 0 || (clock_external && !divmode)) {
 		clock_phase++;
-		if(clock_phase>1) clock_phase=0;
+		if(clock_phase>1) 
+			clock_phase=0;
 		(*clock_pulse)(clock_phase);
 	}
 }
@@ -406,6 +410,22 @@ static void handler_PollADC(s32 data) {
 	u16 i;
 	adc_convert(&adc);
 
+	if(clock_external) {
+		i = adc[0] / 455;
+		if(i != divknob) {
+			divknob = i;
+			divtime = divknob - 4;
+			if(divtime <= 0) {
+				divmode = 1;
+				divtime = -1 * divtime;
+			}
+			else {
+				divmode = 0;
+			}
+			divtime = 1 << divtime;
+		}
+	}
+	else {
 	// CLOCK POT INPUT
 	i = adc[0];
 	i = i>>2;
@@ -418,6 +438,7 @@ static void handler_PollADC(s32 data) {
 		timer_set(&clockTimer, clock_time);
 	}
 	clock_temp = i;
+	}
 }
 
 static void handler_Front(s32 data) {
@@ -476,6 +497,28 @@ static void handler_KeyTimer(s32 data) {
 
 static void handler_ClockNormal(s32 data) {
 	clock_external = !gpio_get_pin_value(B09); 
+}
+
+static void handler_ClockExt(s32 data) {
+	clockdivtime = time_now();
+	time_clear();
+	// div by 9. 16 8 4 2 0 2 4 8 16
+	if(divmode && divtime == 1)
+		clock(data);
+	else if(divmode && data) {
+		clockdivcount++;
+		if(clockdivcount == (divtime >> 1)) {
+			clock(0);
+		}
+		else if(clockdivcount >= divtime) {
+			clock(1);
+			clockdivcount = 0;
+		}
+	}
+	else if(data) {
+		clockdivtime = (clockdivtime / divtime);
+		timer_reset_set(&clockTimer, clockdivtime);
+	}
 }
 
 
@@ -839,6 +882,7 @@ static inline void assign_main_event_handlers(void) {
 	app_event_handlers[ kEventSaveFlash ] = &handler_SaveFlash;
 	app_event_handlers[ kEventPollADC ]	= &handler_PollADC;
 	app_event_handlers[ kEventClockNormal ] = &handler_ClockNormal;
+	app_event_handlers[ kEventClockExt ] = &handler_ClockExt;
 	app_event_handlers[ kEventFtdiConnect ]	= &handler_FtdiConnect ;
 	app_event_handlers[ kEventFtdiDisconnect ]	= &handler_FtdiDisconnect ;
 	app_event_handlers[ kEventMonomeConnect ]	= &handler_MonomeConnect ;
