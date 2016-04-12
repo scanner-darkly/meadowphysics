@@ -734,6 +734,9 @@ static void refresh() {
 			if(m.position[i1] >= 0)
 				monomeLedBuffer[i1*16 + m.position[i1]] = L0;
 
+			if(m.position[i1] != -1)
+				monomeLedBuffer[i1*16 + 2] = 2;
+
 			for(i2=m.smin[i1];i2<=m.smax[i1];i2++)
 				monomeLedBuffer[i1*16 + i2+8] = L0;
 
