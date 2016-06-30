@@ -137,7 +137,7 @@ void flash_write(void);
 void flash_read(void);
 
 
-static void mp_process_ii(uint8_t i, int d);
+static void mp_process_ii(uint8_t *data, uint8_t l);
 
 
 
@@ -832,7 +832,13 @@ static void refresh_preset() {
 	monome_set_quadrant_flag(1);
 }
 
-static void mp_process_ii(uint8_t i, int d) {
+static void mp_process_ii(uint8_t *data, uint8_t l) {
+	uint8_t i;
+	int d;
+
+	i = data[0];
+	d = (data[1] << 8) + data[2];
+	
 	switch(i) {
 		case MP_PRESET:
 			if(d<0 || d>7)
