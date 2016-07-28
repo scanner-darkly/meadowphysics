@@ -36,7 +36,7 @@
 #define L1 8
 #define L0 4
 
-u8 edit_row, key_count = 0, mode = 0, prev_mode = 0;
+u8 edit_row, key_count = 0, mode = 0, prev_mode = 0, mode_256 = 1, edit_row_256 = 0;
 s8 kcount = 0;
 s8 scount[8] = {0,0,0,0,0,0,0,0};
 
@@ -93,7 +93,7 @@ u32 clockdivtime;
 u8 clockdivcount;
 
 u16 adc[4];
-u8 SIZE, LENGTH, VARI;
+u8 SIZE, LENGTH, VARI, GRID256;
 
 u8 held_keys[32], key_times[256];
 
@@ -379,6 +379,7 @@ static void handler_FtdiDisconnect(s32 data) {
 static void handler_MonomeConnect(s32 data) {
 	// print_dbg("\r\n// monome connect /////////////////"); 
 	key_count = 0;
+    GRID256 = monome_size_y() == 16;
 	SIZE = monome_size_x();
 	LENGTH = SIZE - 1;
 	// print_dbg("\r monome size: ");
@@ -577,6 +578,70 @@ static void handler_MonomeGridKey(s32 data) {
 		}
 	}
 
+    if (GRID256 && y > 7) {
+        edit_row_256 = y - 8;
+        if (x == 0) mode_256 = 1;
+        else if (x == 1) mode_256 = 2;
+		else if (mode_256 == 1) {
+            y -= 8;
+			scount[y] += (z<<1)-1;
+			if(scount[y]<0) scount[y] = 0;
+
+			if(z==1) {
+				if(x > 7) {
+					if(scount[y] == 1) {
+						m.smin[y] = x-8;
+						m.smax[y] = x-8;
+						m.speed[y] = x-8;
+						m.tick[y] = m.speed[y];
+					}
+					else if(scount[y] == 2) {
+						if(x-8 < m.smin[y]) {
+							m.smax[y] = m.smin[y];
+							m.smin[y] = x-8;
+						}
+						else
+							m.smax[y] = x-8;
+					}
+				}
+				else if(x == 5) {
+					m.toggle[edit_row_256] ^= 1<<y;
+					m.trigger[edit_row_256] &= ~(1<<y);
+				}
+				else if(x == 6) {
+					m.trigger[edit_row_256] ^= 1<<y;
+					m.toggle[edit_row_256] &= ~(1<<y);
+				}
+				else if(x == 4) {
+					m.sound ^= 1;
+				}
+				else if(x == 2) {
+					if(m.position[y] == -1) {
+						m.position[y] = m.count[y];
+					}
+					else {
+						m.position[y] = -1;
+					}
+				}
+				else if(x == 3) {
+					m.sync[edit_row_256] ^= (1<<y);
+				}
+			}
+		}
+		else if (mode_256 == 2 && z == 1) {
+            y -= 8;
+			if(x > 3 && x < 7) {
+				m.rule_dests[edit_row_256] = y;
+				m.rule_dest_targets[edit_row_256] = x-3;
+			}
+			else if(x > 6) {
+				m.rules[edit_row_256] = y;
+			}
+		}
+        monomeFrameDirty++;
+        return;
+    }
+    
 	// PRESET SCREEN
 	if(preset_mode) {
 		// glyph magic
@@ -801,6 +866,99 @@ static void refresh() {
 		}
 	}
 
+    if (GRID256) {
+        
+        for (u16 i = 128; i < 256; i++) monomeLedBuffer[i] = 0;
+        
+        // SHOW SPEED
+        if(mode_256 == 1) {
+            for(i1=0;i1<8;i1++) {
+                if(m.position[i1] >= 0)
+                    monomeLedBuffer[128 + i1*16 + m.position[i1]] = L0;
+
+                if(m.position[i1] != -1)
+                    monomeLedBuffer[128 + i1*16 + 2] = 2;
+
+                for(i2=m.smin[i1];i2<=m.smax[i1];i2++)
+                    monomeLedBuffer[128 + i1*16 + i2+8] = L0;
+
+                monomeLedBuffer[128 + i1*16 + m.speed[i1]+8] = L1;
+
+                if(m.sound)
+                    monomeLedBuffer[128 + i1*16 + 4] = 2;
+
+                if(m.toggle[edit_row_256] & (1 << i1))
+                    monomeLedBuffer[128 + i1*16 + 5] = L2;
+                else
+                    monomeLedBuffer[128 + i1*16 + 5] = L0;
+
+                if(m.trigger[edit_row_256] & (1 << i1))
+                    monomeLedBuffer[128 + i1*16 + 6] = L2;
+                else
+                    monomeLedBuffer[128 + i1*16 + 6] = L0;
+
+                if(m.sync[edit_row_256] & (1<<i1))
+                    monomeLedBuffer[128 + i1*16 + 3] = L1;
+                else  
+                    monomeLedBuffer[128 + i1*16 + 3] = L0;
+            }
+
+            monomeLedBuffer[128 + edit_row_256 * 16] = L2;
+        }
+        // SHOW RULES
+        else if(mode_256 == 2) {
+            for(i1=0;i1<8;i1++) 
+                if(m.position[i1] >= 0)
+                    monomeLedBuffer[128 + i1*16 + m.position[i1]] = L0;
+
+            monomeLedBuffer[128 + edit_row_256 * 16] = L1;
+            monomeLedBuffer[128 + edit_row_256 * 16 + 1] = L1;
+
+            if(m.rule_dest_targets[edit_row_256] == 1) {
+                monomeLedBuffer[128 + m.rule_dests[edit_row_256] * 16 + 4] = L2;
+                monomeLedBuffer[128 + m.rule_dests[edit_row_256] * 16 + 5] = L0;
+                monomeLedBuffer[128 + m.rule_dests[edit_row_256] * 16 + 6] = L0;
+            }
+            else if (m.rule_dest_targets[edit_row_256] == 2) {
+                monomeLedBuffer[128 + m.rule_dests[edit_row_256] * 16 + 4] = L0;
+                monomeLedBuffer[128 + m.rule_dests[edit_row_256] * 16 + 5] = L2;
+                monomeLedBuffer[128 + m.rule_dests[edit_row_256] * 16 + 6] = L0;
+            }
+            else {
+                monomeLedBuffer[128 + m.rule_dests[edit_row_256] * 16 + 4] = L2;
+                monomeLedBuffer[128 + m.rule_dests[edit_row_256] * 16 + 5] = L2;
+                monomeLedBuffer[128 + m.rule_dests[edit_row_256] * 16 + 6] = L0;
+            }
+
+            for(i1=8;i1<16;i1++)
+                monomeLedBuffer[128 + m.rules[edit_row_256] * 16 + i1] = L0;
+
+
+            for(i1=0;i1<8;i1++) {
+                i3 = sign[m.rules[edit_row_256]][i1];
+                for(i2=0;i2<8;i2++) {
+                    if((i3 & (1<<i2)) != 0)
+                        monomeLedBuffer[128 + i1*16 + 8 + i2] = L2;
+                }
+            }
+        }
+        
+        if (mode_256 == 1) {
+            for(i1=0;i1<8;i1++) {
+                monomeLedBuffer[128 + (i1 << 4)] = i1 == edit_row_256 ? L2 : L1;
+                monomeLedBuffer[128 + (i1 << 4) + 1] = L0;
+            }
+        } else if (mode_256 == 2) {
+            for(i1=0;i1<8;i1++) {
+                monomeLedBuffer[128 + (i1 << 4)] = L0;
+                monomeLedBuffer[128 + (i1 << 4) + 1] = i1 == edit_row_256 ? L2 : L1;
+            }
+        }
+        
+        monome_set_quadrant_flag(2);
+        monome_set_quadrant_flag(3);
+    }
+    
 	monome_set_quadrant_flag(0);
 	monome_set_quadrant_flag(1);
 }
