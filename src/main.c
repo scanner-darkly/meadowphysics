@@ -557,7 +557,7 @@ static void handler_MonomeGridKey(s32 data) {
 
 		// FAST PRESS
 		if(key_times[index] > 0) {
-			if(preset_mode == 1) {
+			if(preset_mode == 1 && y < 8) {
 				if(x == 0 && y != preset_select) {
 					preset_select = y;
 					for(i1=0;i1<8;i1++)
@@ -579,10 +579,13 @@ static void handler_MonomeGridKey(s32 data) {
 	}
 
     if (GRID256 && y > 7) {
-        edit_row_256 = y - 8;
-        if (x == 0) mode_256 = 1;
-        else if (x == 1) mode_256 = 2;
-		else if (mode_256 == 1) {
+        if (x == 0) {
+            mode_256 = 1;
+            edit_row_256 = y - 8;
+        } else if (x == 1) {
+            mode_256 = 2;
+            edit_row_256 = y - 8;
+        } else if (mode_256 == 1) {
             y -= 8;
 			scount[y] += (z<<1)-1;
 			if(scount[y]<0) scount[y] = 0;
