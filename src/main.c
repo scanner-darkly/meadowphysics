@@ -991,6 +991,12 @@ static void refresh_preset() {
 
 	monome_set_quadrant_flag(0);
 	monome_set_quadrant_flag(1);
+    
+    if (GRID256) {
+        for(u16 i = 128; i < 256; i++) monomeLedBuffer[i] = 0;
+        monome_set_quadrant_flag(2);
+        monome_set_quadrant_flag(3);
+    }
 }
 
 static void mp_process_ii(uint8_t *data, uint8_t l) {
